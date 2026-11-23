@@ -12,11 +12,10 @@ class GeminiServiceException(Exception):
 
 class GeminiService:
     def __init__(self):
-        self.api_key = (
-            application_settings.GEMINI_API_KEY
-            or os.environ.get("GEMINI_API_KEY")
-            or os.environ.get("GOOGLE_API_KEY")
-        )
+        self.api_key = application_settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY")
+        if self.api_key:
+            os.environ["GEMINI_API_KEY"] = self.api_key
+            os.environ.pop("GOOGLE_API_KEY", None)
         self.model_name = application_settings.GEMINI_MODEL
         self.embedding_model = application_settings.EMBEDDING_MODEL
         self.client = self._initialize_client()
@@ -32,27 +31,36 @@ class GeminiService:
         system_instruction: Optional[str] = None,
         temperature: float = 0.7
     ) -> str:
+        config = types.GenerateContentConfig(
+            temperature=temperature,
+            system_instruction=system_instruction
+        )
         try:
-            config = types.GenerateContentConfig(
-                temperature=temperature,
-                system_instruction=system_instruction
-            )
             response = self.client.models.generate_content(
                 model=self.model_name,
                 contents=contents,
                 config=config
             )
             return response.text or ""
+        except ServerError:
+            try:
+                fallback_model = "gemini-3.5-flash-lite"
+                fallback_response = self.client.models.generate_content(
+                    model=fallback_model,
+                    contents=contents,
+                    config=config
+                )
+                return fallback_response.text or ""
+            except Exception as nested_error:
+                raise GeminiServiceException(f"Gemini API Server Error: {str(nested_error)}")
         except ClientError as error:
             error_msg = str(error)
             if "leaked" in error_msg.lower() or "permission_denied" in error_msg.lower():
                 raise GeminiServiceException(
-                    "The configured Gemini API key has been revoked by Google (reported as leaked). "
-                    "Please provide a fresh GEMINI_API_KEY in your .env file from Google AI Studio."
+                    "The configured Gemini API key has been revoked by Google. "
+                    "Please provide a fresh GEMINI_API_KEY in your .env file."
                 )
             raise GeminiServiceException(f"Gemini API Client Error: {error_msg}")
-        except ServerError as error:
-            raise GeminiServiceException(f"Gemini API Server Error: {str(error)}")
         except Exception as error:
             raise GeminiServiceException(f"Gemini Generation Error: {str(error)}")
 

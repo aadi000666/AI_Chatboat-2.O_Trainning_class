@@ -1,5 +1,8 @@
 from pathlib import Path
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+load_dotenv(dotenv_path=".env", override=True)
 
 
 class ApplicationSettings(BaseSettings):
@@ -10,7 +13,7 @@ class ApplicationSettings(BaseSettings):
     )
 
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
     EMBEDDING_MODEL: str = "gemini-embedding-001"
 
     MYSQL_HOST: str = "localhost"
